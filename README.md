@@ -6,27 +6,26 @@ This project explores how students can make a limited allowance last until their
 
 `allocation.py` is the runnable Python prototype. On 24 November 2026, the active budgeting and spending logic developed in `allowance_allocation_jupyter_notebook.ipynb` was moved into this file. The notebook remains the testing ground for experiments and model development. The original airtime-flow code is preserved in Git history.
 
-The program accepts an allowance, a positive whole-number period in days, and amounts to protect for internet, transport, and emergencies. It subtracts those commitments and treats the remaining balance as feeding funds, divided across the period. It then records one simulated feeding expense within the daily limit and displays the remaining daily allowance and spendable balance.
+The program accepts an allowance, a positive whole-number period in days, and amounts to protect for internet, transport, and emergencies. It subtracts those commitments and treats the remaining balance as feeding funds. The current Python program includes the notebook's category purchase menu, repeated purchases, and same-day JSON saving and loading.
 
 Money calculations use Python's `Decimal`. The input loop rejects negative or nonfinite money values, invalid numeric text, and zero, negative, or fractional days. When commitments exceed the allowance, it reports the shortfall and prompts for another attempt. A fully committed allowance produces a daily budget of zero.
 
-The Python file contains the following functions from the earlier notebook milestone.
+The Python file contains the core calculations and interactive entry point, together with the menu and persistence functions listed below.
 
 | Function | Responsibility |
 | --- | --- |
 | `users_decision()` | Collect the allowance, period, and commitment amounts from the user. |
 | `commitment_function(total_allowance, internet, transportation, emergency)` | Validate money values and return the available balance followed by the protected total. |
 | `allocation_function(balance, days)` | Check for a negative balance or nonpositive days, then return the balance divided by days. |
-| `spending_function(maximum_budget)` | Collect and validate one expense against the available daily limit. |
-| `allowance_allocation()` | Run budget setup and spending through separate retry loops and display results. |
+| `allowance_allocation()` | Start the saved-budget menu when running the script. |
 
-An invalid budget setup repeats the setup prompts. An invalid spending request repeats only the spending prompt. The calculation functions accept supplied values for reuse in experiments. The script starts through an `if __name__ == "__main__"` guard, so importing it defines the functions without prompting for input.
+An invalid budget setup repeats the setup prompts. An invalid spending request returns to the session menu. The calculation functions accept supplied values for reuse in experiments. The script starts through an `if __name__ == "__main__"` guard, so importing it defines the functions without prompting for input.
 
-The Word document contains the developing academic paper. Printed daily budgets are rounded to two decimal places. A rule for distributing rounding remainders across days is pending. Whole-number days and finite money values are validated through the interactive flow; the standalone daily-budget function currently checks only negative balances and nonpositive days. Each script run handles one approved feeding expense.
+The Word document contains the developing academic paper. A rule for distributing rounding remainders across days is pending. Whole-number days and finite money values are validated through the interactive flow; the standalone daily-budget function currently checks only negative balances and nonpositive days.
 
-## Latest notebook experiments
+## Category purchases and persistence
 
-The notebook now extends the Python milestone with a category purchase menu and local JSON saving. These additions are currently implemented in the notebook.
+The category purchase menu and local JSON saving developed in the notebook are now also available in `allocation.py`. The notebook remains the testing ground for further model development.
 
 | Function | Responsibility |
 | --- | --- |
@@ -50,7 +49,7 @@ From the project folder, run the program with Python 3.
 python allocation.py
 ```
 
-The script uses Python's standard library. Follow the prompts to set up the allowance and record one feeding expense.
+The script requires Python 3.10 or later for `match` cases and uses only the standard library. Choose a new budget or resume today's save, then use the menu to view balances or record category purchases. Exit the session menu to save to `saved_balance.json` in the current working directory.
 
 For notebook experiments, use the following workflow.
 
@@ -67,6 +66,8 @@ Restarting the kernel clears definitions, so rerun cells 6 through 9 before star
 For an allowance of ₦80,000 over 31 days, with ₦5,000 for internet, ₦10,000 for transport, and a ₦5,000 emergency reserve, the prototype protects ₦20,000 and calculates a daily budget of ₦1,935.48 from the remaining ₦60,000.
 
 ## Verification
+
+The updated Python program was checked against the current notebook using simulated new-budget and resumed-budget sessions. The checks compared prompts, outputs, and saved balances, including a rejected repeat purchase. Additional checks covered import behavior and invalid save files.
 
 On 24 November 2026, eleven purchase and menu checks passed for the new notebook flow. They covered category-specific deductions, repeated overspending, invalid choices and amounts, cancellation, zero availability, and a complete menu session. Seven additional persistence checks passed, covering exact decimal round trips, resumed purchases, retained daily limits, new saves, missing files, corrupt files, and rejection of previous-day saves. Temporary files were used for these checks.
 
@@ -95,6 +96,7 @@ Starter research question: How does a priority-based allocation rule compare wit
 | 2026-11-23 | Separated input collection from both calculation functions and restored the outer retry loop in commit `fbc5cf5`. All eight scripted checks passed after the refactor. | Build a spending-update function and recalculate the daily budget after a day of spending. |
 | 2026-11-24 | Added validated feeding expenses, separate spending retries, and remaining-balance calculations in the notebook. Moved the active logic into an organized, runnable `allocation.py` with an import-safe entry point. Five comparison scenarios and an import check passed. | Represent category balances together, then add a menu and persistence. |
 | 2026-11-24 | Added notebook category purchases, repeated-purchase limits, balance menus, and same-day JSON saving and loading in commit `70e3d6b`. Eleven purchase/menu checks and seven persistence checks passed. | Define day advancement and carryover, then migrate the verified notebook additions into the Python program. |
+| 2026-11-24 | Migrated the notebook's category purchase and persistence functions into `allocation.py`, retaining the simple loops and match cases. | Define day advancement and carryover. |
 
 ## Planned development
 
