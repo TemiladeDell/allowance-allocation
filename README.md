@@ -10,7 +10,7 @@ The program accepts an allowance, a positive whole-number period in days, and am
 
 Money calculations use Python's `Decimal`. The input loop rejects negative or nonfinite money values, invalid numeric text, and zero, negative, or fractional days. When commitments exceed the allowance, it reports the shortfall and prompts for another attempt. A fully committed allowance produces a daily budget of zero.
 
-The Python file follows the notebook's functional breakdown.
+The Python file contains the following functions from the earlier notebook milestone.
 
 | Function | Responsibility |
 | --- | --- |
@@ -22,7 +22,25 @@ The Python file follows the notebook's functional breakdown.
 
 An invalid budget setup repeats the setup prompts. An invalid spending request repeats only the spending prompt. The calculation functions accept supplied values for reuse in experiments. The script starts through an `if __name__ == "__main__"` guard, so importing it defines the functions without prompting for input.
 
-The Word document contains the developing academic paper. Printed daily budgets are rounded to two decimal places. A rule for distributing rounding remainders across days is pending. Whole-number days and finite money values are validated through the interactive flow; the standalone daily-budget function currently checks only negative balances and nonpositive days. Each run handles one approved feeding expense. Persistence, repeated purchases, category-specific purchases, and movement between days remain planned work.
+The Word document contains the developing academic paper. Printed daily budgets are rounded to two decimal places. A rule for distributing rounding remainders across days is pending. Whole-number days and finite money values are validated through the interactive flow; the standalone daily-budget function currently checks only negative balances and nonpositive days. Each script run handles one approved feeding expense.
+
+## Latest notebook experiments
+
+The notebook now extends the Python milestone with a category purchase menu and local JSON saving. These additions are currently implemented in the notebook.
+
+| Function | Responsibility |
+| --- | --- |
+| `spending_function(category_balances, daily_limits)` | Validate a simulated airtime/data, transport, or feeding purchase and update the selected category and its remaining daily availability. |
+| `user_menu(category_balances=None, daily_limits=None)` | Set up a budget or use supplied balances, display balances, record repeated purchases, and return the updated values on exit. |
+| `save_balances(category_balances, daily_limits, file_path)` | Save category balances and daily availability as decimal strings in JSON. |
+| `load_balances(file_path)` | Validate and restore today's saved balances as `Decimal` values. |
+| `saved_budget_menu(file_path)` | Start a new budget or resume today's saved budget, then save the results when the budget menu exits. |
+
+Each purchase reduces only its selected category and today's availability for that category. Emergency funds remain reserved. Invalid requests and cancelled purchases preserve balances. Reopening today's save preserves the remaining daily limits, preventing a restart from granting another full daily allowance.
+
+Daily availability for feeding, internet, and transport is calculated from each category's allocation and the budget period, rounded down to the nearest kobo. Purchase amounts must be positive, finite, within the remaining limit, and have at most two decimal places. Purchases are recorded as local simulations.
+
+Saving currently happens when the budget menu exits. A new budget replaces the existing single-user save after that session. Dates use the computer's local date. Saves from another day are rejected until day advancement is implemented. Automatic saving after each purchase, carryover, transaction history, and multi-user support remain pending.
 
 ## Run the prototype
 
@@ -36,13 +54,23 @@ The script uses Python's standard library. Follow the prompts to set up the allo
 
 For notebook experiments, use the following workflow.
 
-Open `allowance_allocation_jupyter_notebook.ipynb` in Jupyter or VS Code with the Python and Jupyter extensions. Select a Python kernel, run the active cells containing imports and function definitions in order, then run the final retry-loop cell and answer its prompts. Restarting the kernel clears earlier definitions, so rerun the definition cells before using the functions again. Earlier worked examples are currently commented out. The active code uses Python's standard library.
+Open `allowance_allocation_jupyter_notebook.ipynb` in Jupyter or VS Code with the Python and Jupyter extensions. Select a Python kernel and run cells 6 through 9 in order to define the current functions. In a new cell, run the following command.
+
+```python
+saved_budget_menu()
+```
+
+Choose a new budget or continue today's saved budget. Use the session menu to view balances, inspect daily availability, make a simulated purchase, or exit and save. The default save is `saved_balance.json` in the kernel's working directory. An alternative path can be supplied as `saved_budget_menu("my_budget.json")`.
+
+Restarting the kernel clears definitions, so rerun cells 6 through 9 before starting another session. Earlier worked examples are currently commented out. The active code uses Python's standard library.
 
 For an allowance of ₦80,000 over 31 days, with ₦5,000 for internet, ₦10,000 for transport, and a ₦5,000 emergency reserve, the prototype protects ₦20,000 and calculates a daily budget of ₦1,935.48 from the remaining ₦60,000.
 
 ## Verification
 
-On 24 November 2026, five scenarios compared the script's prompts and outputs with the active notebook logic using simulated input. They covered a valid purchase, spending retries, setup retries, a shortfall retry, and a fully committed allowance with zero spending. All five matched, allowing for a spelling correction in the shortfall message. A separate check confirmed that importing the script does not prompt for input.
+On 24 November 2026, eleven purchase and menu checks passed for the new notebook flow. They covered category-specific deductions, repeated overspending, invalid choices and amounts, cancellation, zero availability, and a complete menu session. Seven additional persistence checks passed, covering exact decimal round trips, resumed purchases, retained daily limits, new saves, missing files, corrupt files, and rejection of previous-day saves. Temporary files were used for these checks.
+
+Earlier on 24 November 2026, five scenarios compared the script's prompts and outputs with the notebook logic at the migration milestone. They covered a valid purchase, spending retries, setup retries, a shortfall retry, and a fully committed allowance with zero spending. All five matched, allowing for a spelling correction in the shortfall message. A separate check confirmed that importing the script does not prompt for input.
 
 On 23 November 2026, eight scripted checks executed the refactored notebook code in fresh namespaces with simulated input. They covered a funded budget, a fully committed allowance, invalid money text, zero days, fractional days, a shortfall followed by a valid attempt, a nonfinite allowance, and a negative commitment. All eight passed. The checks were run during development and are not yet stored as a test suite in the repository. They verified the input and calculation flow. Evaluation of student outcomes remains pending.
 
@@ -66,10 +94,11 @@ Starter research question: How does a priority-based allocation rule compare wit
 | 2026-11-22 | Verified and pushed commitment calculations and input retry handling in commit `401a414`. All eight scripted checks passed. | Pass explicit inputs into the calculation functions and separate interactive prompts from calculations. |
 | 2026-11-23 | Separated input collection from both calculation functions and restored the outer retry loop in commit `fbc5cf5`. All eight scripted checks passed after the refactor. | Build a spending-update function and recalculate the daily budget after a day of spending. |
 | 2026-11-24 | Added validated feeding expenses, separate spending retries, and remaining-balance calculations in the notebook. Moved the active logic into an organized, runnable `allocation.py` with an import-safe entry point. Five comparison scenarios and an import check passed. | Represent category balances together, then add a menu and persistence. |
+| 2026-11-24 | Added notebook category purchases, repeated-purchase limits, balance menus, and same-day JSON saving and loading in commit `70e3d6b`. Eleven purchase/menu checks and seven persistence checks passed. | Define day advancement and carryover, then migrate the verified notebook additions into the Python program. |
 
 ## Planned development
 
-Next, category balances will be represented together so a menu can display them and route purchases to the appropriate category. JSON storage is planned for local persistence before introducing a database. Further work will address repeated purchases, category availability and carryover, movement between days, debt repayment deadlines, delayed allowances, savings goals, and evaluation against a baseline. Authentication and a web interface are planned for a usable prototype. AI-assisted prediction is a later research direction. Functions remain together in one Python file while these responsibilities develop.
+Next, define how a budget advances between days, including carryover, remaining days, and the final day of the period. Migrate verified notebook additions into the Python program as they stabilize. Later stages will address transaction history, debt repayment deadlines, delayed allowances, savings goals, and evaluation against a baseline. A database, authentication, and a web interface are planned for a usable prototype. AI-assisted prediction is a later research direction. Functions remain together in one Python file while these responsibilities develop.
 
 ## GitHub workflow
 
