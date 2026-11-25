@@ -8,7 +8,6 @@ def budget_today():
     return datetime.now(timezone(timedelta(hours=1))).date()
 
 
-
 def choose_savings_mode():
     choice = input("1. Reluctant Saver\n2. Non-reluctant Saver\n").strip()
     match choice:
@@ -20,67 +19,76 @@ def choose_savings_mode():
             raise ValueError("Choose 1 or 2.")
 
 
-def schedule_savings_mode(budget_state, new_mode, today=None):
+# Choose the automatic percentage once during setup or a scheduled plan change.
+def choose_savings_rate():
+    choice = input("Choose your automatic daily savings rate:\n1. Small 10%\n2. Medium 20%\n3. Hardcore 30%\n").strip()
+    match choice:
+        case "1":
+            return Decimal("0.10")
+        case "2":
+            return Decimal("0.20")
+        case "3":
+            return Decimal("0.30")
+        case _:
+            raise ValueError("Choose 1, 2, or 3.")
+
+
+def schedule_savings_mode(budget_state, new_mode, today=None, new_rate=None):
     if today is None:
         today = budget_today()
     if today.isoformat() != budget_state["active_date"]:
         raise ValueError("Advance the budget to today first.")
     if new_mode not in ("reluctant", "non_reluctant"):
         raise ValueError("Unknown savings mode.")
-    if new_mode == budget_state["savings_mode"]:
+    if new_mode == "non_reluctant":
+        if new_rate not in (Decimal("0.10"), Decimal("0.20"), Decimal("0.30")):
+            raise ValueError("Choose a savings rate of 10%, 20%, or 30%.")
+    else:
+        new_rate = None
+    if new_mode == budget_state["savings_mode"] and new_rate == budget_state["savings_rate"]:
         budget_state["pending_savings_mode"] = None
         budget_state["pending_mode_date"] = None
+        budget_state["pending_savings_rate"] = None
         return
     budget_state["pending_savings_mode"] = new_mode
+    budget_state["pending_savings_rate"] = new_rate
     budget_state["pending_mode_date"] = (today + timedelta(days=1)).isoformat()
 
 
-
+# Automatic deduction: no contribution prompt. Use the original daily allowance,
+# excluding carryover. A saved date prevents another debit on the same day.
 def savings_allocation(category_balances, daily_limits, budget_state, today=None):
     if today is None:
         today = budget_today()
     if today.isoformat() != budget_state["active_date"]:
         raise ValueError("Advance the budget to today first.")
-    if budget_state["remaining_days"] <= 0:
-        raise ValueError("The allowance period has ended.")
-    if budget_state["savings_mode"] == "reluctant":
-        print("Unused feeding availability moves to savings when the day closes.")
+    if budget_state["remaining_days"] <= 0 or budget_state["savings_mode"] == "reluctant":
         return Decimal("0")
-    if budget_state["last_voluntary_savings_date"] == today.isoformat():
-        raise ValueError("You have already contributed today.")
-    choice = input("1. Small 10%\n2. Medium 20%\n3. Hardcore 30%\n4. Cancel\n").strip()
-    match choice:
-        case "1":
-            rate = Decimal("0.10")
-        case "2":
-            rate = Decimal("0.20")
-        case "3":
-            rate = Decimal("0.30")
-        case "4":
-            return Decimal("0")
-        case _:
-            raise ValueError("Choose 1, 2, 3, or 4.")
+    if budget_state["last_savings_date"] == today.isoformat():
+        return Decimal("0")
+    rate = budget_state["savings_rate"]
+    if rate not in (Decimal("0.10"), Decimal("0.20"), Decimal("0.30")):
+        raise ValueError("An automatic savings rate must be selected.")
     original_allowance = budget_state["original_daily_limits"]["feeding"]
     amount = (original_allowance * rate).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
-    if amount <= 0:
-        raise ValueError("The contribution must be at least one kobo.")
     if amount > daily_limits["feeding"] or amount > category_balances["feeding"]:
-        raise ValueError("Not enough feeding money remains for this contribution.")
+        raise ValueError("Not enough feeding money remains for automatic savings.")
     category_balances["feeding"] -= amount
     daily_limits["feeding"] -= amount
     category_balances["savings"] += amount
-    budget_state["last_voluntary_savings_date"] = today.isoformat()
+    budget_state["last_savings_date"] = today.isoformat()
     return amount
 
 
-
+# Open each day by applying automatic savings before spending can begin.
+# Reluctant mode still saves leftovers only when the previous day closes.
 def advance_budget_day(category_balances, daily_limits, budget_state, today=None):
     if today is None:
         today = budget_today()
     active = date.fromisoformat(budget_state["active_date"])
     if today < active:
         raise ValueError("Today's date is earlier than the budget date.")
-    saved = Decimal("0")
+    saved = savings_allocation(category_balances, daily_limits, budget_state, active)
     while active < today and budget_state["remaining_days"] > 0:
         if budget_state["last_closed_date"] != active.isoformat():
             if budget_state["savings_mode"] == "reluctant":
@@ -96,7 +104,9 @@ def advance_budget_day(category_balances, daily_limits, budget_state, today=None
         if budget_state["pending_mode_date"] is not None:
             if budget_state["pending_mode_date"] <= active.isoformat():
                 budget_state["savings_mode"] = budget_state["pending_savings_mode"]
+                budget_state["savings_rate"] = budget_state["pending_savings_rate"]
                 budget_state["pending_savings_mode"] = None
+                budget_state["pending_savings_rate"] = None
                 budget_state["pending_mode_date"] = None
         for category in ("feeding", "internet", "transport"):
             if budget_state["remaining_days"] == 0:
@@ -108,6 +118,8 @@ def advance_budget_day(category_balances, daily_limits, budget_state, today=None
                 daily_limits[category] = min(
                     category_balances[category], daily_limits[category] + release
                 )
+        # The newly released allowance is reduced before the next menu action.
+        saved += savings_allocation(category_balances, daily_limits, budget_state, active)
     return saved
 
 
@@ -251,6 +263,9 @@ def user_menu(category_balances=None, daily_limits=None, budget_state=None):
             allowance, internet, transport, emergency, days = users_decision()
             balance, expenditure_balance = commitment_function(allowance, internet, transport, emergency)
             mode = choose_savings_mode()
+            rate = None
+            if mode == "non_reluctant":
+                rate = choose_savings_rate()
             category_balances = {
                 "feeding": balance, "internet": internet, "transport": transport,
                 "emergency": emergency, "savings": Decimal("0"),
@@ -264,16 +279,33 @@ def user_menu(category_balances=None, daily_limits=None, budget_state=None):
                 "active_date": budget_today().isoformat(), "remaining_days": days,
                 "original_daily_limits": daily_limits.copy(), "savings_mode": mode,
                 "pending_savings_mode": None, "pending_mode_date": None,
-                "last_voluntary_savings_date": None, "last_closed_date": None,
+                "savings_rate": rate, "pending_savings_rate": None,
+                "last_savings_date": None, "last_closed_date": None,
+                "savings_rule_version": 2,
             })
             break
         except (ValueError, InvalidOperation) as error:
             print(error)
+    # Older manual-savings saves need a rate choice before future day releases.
+    # Their already-open day is preserved without a retrospective deduction.
+    if budget_state["savings_rule_version"] == 1:
+        while True:
+            try:
+                if budget_state["savings_mode"] == "non_reluctant":
+                    print("Choose the automatic rate for future daily releases.")
+                    budget_state["savings_rate"] = choose_savings_rate()
+                if budget_state["pending_savings_mode"] == "non_reluctant":
+                    print("Choose the rate for your scheduled savings mode.")
+                    budget_state["pending_savings_rate"] = choose_savings_rate()
+                budget_state["savings_rule_version"] = 2
+                break
+            except ValueError as error:
+                print(error)
     while True:
         advance_budget_day(category_balances, daily_limits, budget_state)
         choice = input(
             "\n1. View balances\n2. View daily availability\n3. Make a simulated purchase\n"
-            "4. Exit\n5. Make a voluntary contribution\n6. Change savings mode tomorrow\n"
+            "4. Exit\n5. Change savings mode or rate tomorrow\n"
         ).strip()
         advance_budget_day(category_balances, daily_limits, budget_state)
         try:
@@ -283,6 +315,8 @@ def user_menu(category_balances=None, daily_limits=None, budget_state=None):
                         print(f"{category.capitalize()}: NGN {amount:,.2f}")
                     print(f"Total remaining: NGN {sum(category_balances.values()):,.2f}")
                     print(f"Savings mode: {budget_state['savings_mode']}")
+                    if budget_state["savings_mode"] == "non_reluctant":
+                        print(f"Automatic daily savings: {budget_state['savings_rate'] * 100}%")
                 case "2":
                     for category, amount in daily_limits.items():
                         print(f"{category.capitalize()} available today: NGN {amount:,.2f}")
@@ -297,15 +331,16 @@ def user_menu(category_balances=None, daily_limits=None, budget_state=None):
                 case "4":
                     return category_balances, daily_limits
                 case "5":
-                    amount = savings_allocation(category_balances, daily_limits, budget_state)
-                    print(f"Savings contribution: NGN {amount:,.2f}")
-                case "6":
                     if budget_state["remaining_days"] <= 0:
                         raise ValueError("The allowance period has ended.")
-                    schedule_savings_mode(budget_state, choose_savings_mode())
+                    new_mode = choose_savings_mode()
+                    new_rate = None
+                    if new_mode == "non_reluctant":
+                        new_rate = choose_savings_rate()
+                    schedule_savings_mode(budget_state, new_mode, new_rate=new_rate)
                     print("Mode choice recorded for the next day.")
                 case _:
-                    print("Choose an option from 1 to 6.")
+                    print("Choose an option from 1 to 5.")
         except (ValueError, InvalidOperation) as error:
             print(error)
 
@@ -328,6 +363,10 @@ def save_balances(category_balances, daily_limits, file_path="saved_balance.json
         user["budget_state"]["original_daily_limits"] = {}
         for category, amount in budget_state["original_daily_limits"].items():
             user["budget_state"]["original_daily_limits"][category] = str(amount)
+        # Save rates as strings, just like other Decimal money values.
+        for key in ("savings_rate", "pending_savings_rate"):
+            if budget_state[key] is not None:
+                user["budget_state"][key] = str(budget_state[key])
     destination = Path(file_path)
     temporary_file = destination.with_name(destination.name + ".tmp")
     with temporary_file.open("w", encoding="utf-8") as file:
@@ -371,7 +410,29 @@ def load_balances(file_path="saved_balance.json", budget_state=None):
             raise ValueError("Invalid savings mode.")
         if state["pending_savings_mode"] not in (None, "reluctant", "non_reluctant"):
             raise ValueError("Invalid pending savings mode.")
-        for key in ("last_voluntary_savings_date", "last_closed_date"):
+        # Migrate earlier manual-savings state without charging its open day again.
+        version = state.get("savings_rule_version", 1)
+        if type(version) is not int or version not in (1, 2):
+            raise ValueError("Unsupported savings rules version.")
+        state["savings_rule_version"] = version
+        if version == 1:
+            state["last_savings_date"] = state["active_date"]
+            state["savings_rate"] = None
+            state["pending_savings_rate"] = None
+        for key in ("savings_rate", "pending_savings_rate"):
+            raw = state[key]
+            if raw is not None:
+                value = Decimal(raw)
+                if not value.is_finite() or value not in (Decimal("0.10"), Decimal("0.20"), Decimal("0.30")):
+                    raise ValueError("Saved savings rate must be 10%, 20%, or 30%.")
+                state[key] = value
+        if version == 2:
+            if state["savings_mode"] == "non_reluctant" and state["savings_rate"] is None:
+                raise ValueError("Saved automatic savings rate is missing.")
+            if state["pending_savings_mode"] == "non_reluctant" and state["pending_savings_rate"] is None:
+                raise ValueError("Pending automatic savings rate is missing.")
+        state.pop("last_voluntary_savings_date", None)
+        for key in ("last_savings_date", "last_closed_date"):
             if state[key] is not None and date.fromisoformat(state[key]) > saved_date:
                 raise ValueError("Invalid processing date.")
         if (state["pending_savings_mode"] is None) != (state["pending_mode_date"] is None):
