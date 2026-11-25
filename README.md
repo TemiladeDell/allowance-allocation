@@ -6,6 +6,8 @@ This project explores how students can make a limited allowance last until their
 
 `allocation.py` is the runnable Python prototype. On 24 November 2026, the active budgeting and spending logic developed in `allowance_allocation_jupyter_notebook.ipynb` was moved into this file. The notebook remains the testing ground for experiments and model development. The original airtime-flow code is preserved in Git history.
 
+The notebook's latest milestone adds savings modes and day advancement, verified on 25 November 2026 in commit `66fe44d`. These additions currently run in the notebook. The Python script contains the earlier category-purchase and same-day persistence milestone.
+
 The program accepts an allowance, a positive whole-number period in days, and amounts to protect for internet, transport, and emergencies. It subtracts those commitments and treats the remaining balance as feeding funds. The current Python program includes the notebook's category purchase menu, repeated purchases, and same-day JSON saving and loading.
 
 Money calculations use Python's `Decimal`. The input loop rejects negative or nonfinite money values, invalid numeric text, and zero, negative, or fractional days. When commitments exceed the allowance, it reports the shortfall and prompts for another attempt. A fully committed allowance produces a daily budget of zero.
@@ -39,7 +41,30 @@ Each purchase reduces only its selected category and today's availability for th
 
 Daily availability for feeding, internet, and transport is calculated from each category's allocation and the budget period, rounded down to the nearest kobo. Purchase amounts must be positive, finite, within the remaining limit, and have at most two decimal places. Purchases are recorded as local simulations.
 
-Saving currently happens when the budget menu exits. A new budget replaces the existing single-user save after that session. Dates use the computer's local date. Saves from another day are rejected until day advancement is implemented. Automatic saving after each purchase, carryover, transaction history, and multi-user support remain pending.
+Saving currently happens when the budget menu exits. A new budget replaces the existing single-user save after that session. The Python script uses the computer's local date and supports same-day resumption. The latest notebook uses Nigeria calendar dates and processes elapsed budget days. Automatic saving after each purchase, transaction history, and multi-user support remain pending.
+
+## Savings and day advancement in the notebook
+
+Each account has one active savings mode and one accumulated savings balance.
+
+| Mode | Rule |
+| --- | --- |
+| Reluctant Saver | Move unused feeding availability into savings when the day closes. The next day receives its usual allowance, subject to available funds and final-day rounding. |
+| Non-reluctant Saver | Allow one voluntary contribution per day. Small saves 10%, Medium saves 20%, and Hardcore saves 30% of the original daily feeding allowance. Unused feeding availability carries forward. |
+
+For an original daily feeding allowance of ₦4,000, the voluntary contributions are ₦400, ₦800, and ₦1,200. Spending and carryover do not change this percentage base. Contributions are rounded down to kobo and require sufficient remaining feeding funds and daily availability. A transfer reduces feeding funds and daily availability, then increases savings by the same amount.
+
+Mode changes take effect the following day. The old day closes under its existing mode. Internet availability carries forward; transport currently follows the same carryover rule. Daily releases increase availability within existing category balances. Day advancement handles elapsed days, prevents repeated closing, and ends releases when the allowance period finishes. The final day makes category rounding remainders available.
+
+| Function | Responsibility |
+| --- | --- |
+| `budget_today()` | Return today's Nigeria calendar date using UTC+1. |
+| `choose_savings_mode()` | Select the active savings method during setup. |
+| `schedule_savings_mode(budget_state, new_mode, today=None)` | Record a mode change for the following day. |
+| `savings_allocation(category_balances, daily_limits, budget_state, today=None)` | Validate and record one voluntary contribution, or explain reluctant day-closing behavior. |
+| `advance_budget_day(category_balances, daily_limits, budget_state, today=None)` | Process day closing, carryover, mode changes, and remaining days. |
+
+The notebook's menu passes `budget_state` explicitly alongside balances and limits. JSON saves include `finances.savings`, original daily allowances, active and pending modes, remaining days, and contribution/day-closing dates. Reopening preserves the once-per-day contribution record. Older saves without this metadata retain readable balances, but the savings menu requires a newly configured budget; keep a backup before replacing an older save.
 
 ## Run the prototype
 
@@ -53,21 +78,23 @@ The script requires Python 3.10 or later for `match` cases and uses only the sta
 
 For notebook experiments, use the following workflow.
 
-Open `allowance_allocation_jupyter_notebook.ipynb` in Jupyter or VS Code with the Python and Jupyter extensions. Select a Python kernel and run cells 6 through 9 in order to define the current functions. In a new cell, run the following command.
+Open `allowance_allocation_jupyter_notebook.ipynb` in Jupyter or VS Code with the Python and Jupyter extensions. Select a Python kernel and run all existing code cells from top to bottom to define the functions. In a new cell, run the following command.
 
 ```python
 saved_budget_menu()
 ```
 
-Choose a new budget or continue today's saved budget. Use the session menu to view balances, inspect daily availability, make a simulated purchase, or exit and save. The default save is `saved_balance.json` in the kernel's working directory. An alternative path can be supplied as `saved_budget_menu("my_budget.json")`.
+Choose a new budget or resume a saved budget. During setup, select a savings mode. The session menu can display balances and daily availability, record a simulated purchase or voluntary contribution, schedule a mode change, or exit and save. Resuming processes elapsed days. The default save is `saved_balance.json` in the kernel's working directory. An alternative path can be supplied as `saved_budget_menu("my_budget.json")`.
 
-Restarting the kernel clears definitions, so rerun cells 6 through 9 before starting another session. Earlier worked examples are currently commented out. The active code uses Python's standard library.
+Restarting the kernel clears definitions, so rerun the definition cells before starting another session. Earlier worked examples are currently commented out. The active code uses Python's standard library.
 
 For an allowance of ₦80,000 over 31 days, with ₦5,000 for internet, ₦10,000 for transport, and a ₦5,000 emergency reserve, the prototype protects ₦20,000 and calculates a daily budget of ₦1,935.48 from the remaining ₦60,000.
 
 ## Verification
 
-The updated Python program was checked against the current notebook using simulated new-budget and resumed-budget sessions. The checks compared prompts, outputs, and saved balances, including a rejected repeat purchase. Additional checks covered import behavior and invalid save files.
+On 25 November 2026, all 23 checks passed against the saved notebook executed in a fresh namespace. They covered all three voluntary rates, duplicate contributions, cancellation and invalid choices, insufficient funds, the original daily percentage base, reluctant day closing, carryover, scheduled mode changes, missed days, final-day handling, backward dates, invalid purchases, complete menu sessions, save/resume, next-day resumption, missing and corrupt files, and legacy balances. Simulated inputs, explicit dates, and temporary files were used. The personal balance-guide Markdown cell was removed before testing and publishing.
+
+The earlier Python migration was checked against its matching notebook milestone using simulated new-budget and resumed-budget sessions. The checks compared prompts, outputs, and saved balances, including a rejected repeat purchase. Additional checks covered import behavior and invalid save files.
 
 On 24 November 2026, eleven purchase and menu checks passed for the new notebook flow. They covered category-specific deductions, repeated overspending, invalid choices and amounts, cancellation, zero availability, and a complete menu session. Seven additional persistence checks passed, covering exact decimal round trips, resumed purchases, retained daily limits, new saves, missing files, corrupt files, and rejection of previous-day saves. Temporary files were used for these checks.
 
@@ -97,10 +124,11 @@ Starter research question: How does a priority-based allocation rule compare wit
 | 2026-11-24 | Added validated feeding expenses, separate spending retries, and remaining-balance calculations in the notebook. Moved the active logic into an organized, runnable `allocation.py` with an import-safe entry point. Five comparison scenarios and an import check passed. | Represent category balances together, then add a menu and persistence. |
 | 2026-11-24 | Added notebook category purchases, repeated-purchase limits, balance menus, and same-day JSON saving and loading in commit `70e3d6b`. Eleven purchase/menu checks and seven persistence checks passed. | Define day advancement and carryover, then migrate the verified notebook additions into the Python program. |
 | 2026-11-24 | Migrated the notebook's category purchase and persistence functions into `allocation.py`, retaining the simple loops and match cases. | Define day advancement and carryover. |
+| 2026-11-25 | Added notebook savings modes, once-per-day voluntary contributions, carryover, scheduled mode changes, day advancement, and persistent savings state. Removed the personal Markdown guide and pushed commit `66fe44d` after all 23 checks passed. | Migrate and verify the savings milestone in the Python program. |
 
 ## Planned development
 
-Next, define how a budget advances between days, including carryover, remaining days, and the final day of the period. Migrate verified notebook additions into the Python program as they stabilize. Later stages will address transaction history, debt repayment deadlines, delayed allowances, savings goals, and evaluation against a baseline. A database, authentication, and a web interface are planned for a usable prototype. AI-assisted prediction is a later research direction. Functions remain together in one Python file while these responsibilities develop.
+Next, migrate and verify the notebook's savings and day-advancement milestone in the Python program. Later stages will address transaction history, debt repayment deadlines, delayed allowances, and evaluation against a baseline. A database and a simulated web interface are planned to demonstrate Student Mode as a potential feature for an established financial platform. AI-assisted prediction is a later research direction. Functions remain together while these responsibilities develop.
 
 ## GitHub workflow
 
